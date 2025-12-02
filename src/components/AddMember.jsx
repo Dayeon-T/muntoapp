@@ -67,6 +67,7 @@ export default function AddMember({ onClose, onSubmit, members = [], onRestoreMe
     try {
       const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
       const results = [];
+      let failedCount = 0;
 
       // 각 이미지 분석
       for (let i = 0; i < imageFiles.length; i++) {
@@ -102,36 +103,102 @@ export default function AddMember({ onClose, onSubmit, members = [], onRestoreMe
 참고:
 - 년생이 두 자리면 1900년대(예: 94 → 1994) 또는 2000년대(예: 04 → 2004)로 적절히 변환
 - 성별을 찾을 수 없으면 빈 문자열
-- 지역을 찾을 수 없으면 빈 문자열`;
+- 지역을 찾을 수 없으면 빈 문자열
+- 정보를 찾을 수 없어도 반드시 위 JSON 형식으로 응답 (찾을 수 없는 필드는 빈 문자열)`;
 
         try {
           const response = await model.generateContent([prompt, imagePart]);
           const text = response.response.text();
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
+          console.log(`이미지 ${i + 1} AI 응답:`, text); // 디버깅용
+          
+          const jsonMatch = text.match(/\{[\s\S]*?\}/);
           
           if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            const existingMember = members.find(
-              (m) => m.nickname?.toLowerCase() === parsed.nickname?.toLowerCase()
-            );
-            
+            try {
+              const parsed = JSON.parse(jsonMatch[0]);
+              const existingMember = members.find(
+                (m) => m.nickname?.toLowerCase() === parsed.nickname?.toLowerCase()
+              );
+              
+              results.push({
+                id: Date.now() + i,
+                nickname: parsed.nickname || `멤버${i + 1}`,
+                joinDate: parsed.joinDate || '',
+                birthYear: parsed.birthYear || '',
+                sex: parsed.sex || '',
+                region: parsed.region || '',
+                imageIndex: i,
+                isDuplicate: !!existingMember,
+                existingMember: existingMember || null,
+                isDisabled: existingMember?.status === 'disabled',
+                parseError: false,
+              });
+            } catch (parseErr) {
+              console.error(`이미지 ${i + 1} JSON 파싱 실패:`, parseErr);
+              // 파싱 실패해도 빈 데이터로 추가 (수동 입력 가능)
+              results.push({
+                id: Date.now() + i,
+                nickname: '',
+                joinDate: '',
+                birthYear: '',
+                sex: '',
+                region: '',
+                imageIndex: i,
+                isDuplicate: false,
+                existingMember: null,
+                isDisabled: false,
+                parseError: true,
+              });
+              failedCount++;
+            }
+          } else {
+            // JSON 형식이 없는 경우 빈 데이터로 추가
             results.push({
               id: Date.now() + i,
-              ...parsed,
+              nickname: '',
+              joinDate: '',
+              birthYear: '',
+              sex: '',
+              region: '',
               imageIndex: i,
-              isDuplicate: !!existingMember,
-              existingMember: existingMember || null,
-              isDisabled: existingMember?.status === 'disabled',
+              isDuplicate: false,
+              existingMember: null,
+              isDisabled: false,
+              parseError: true,
             });
+            failedCount++;
           }
         } catch (err) {
           console.error(`이미지 ${i + 1} 분석 실패:`, err);
+          // API 오류 시에도 빈 데이터로 추가
+          results.push({
+            id: Date.now() + i,
+            nickname: '',
+            joinDate: '',
+            birthYear: '',
+            sex: '',
+            region: '',
+            imageIndex: i,
+            isDuplicate: false,
+            existingMember: null,
+            isDisabled: false,
+            parseError: true,
+          });
+          failedCount++;
         }
       }
 
       setExtractedMembers(results);
-      // 중복 아닌 멤버만 기본 선택
-      setSelectedMembers(results.filter((m) => !m.isDuplicate).map((m) => m.id));
+      // 파싱 성공하고 중복 아닌 멤버만 기본 선택
+      setSelectedMembers(
+        results
+          .filter((m) => !m.isDuplicate && !m.parseError && m.nickname)
+          .map((m) => m.id)
+      );
+      
+      if (failedCount > 0) {
+        setAiError(`${failedCount}개 이미지 분석 실패 - 직접 입력해주세요`);
+      }
     } catch (err) {
       setAiError('AI 오류: ' + err.message);
     } finally {
@@ -362,7 +429,7 @@ export default function AddMember({ onClose, onSubmit, members = [], onRestoreMe
                   </button>
                 </div>
 
-                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
                   {extractedMembers.map((member) => (
                     <div
                       key={member.id}
@@ -386,7 +453,7 @@ export default function AddMember({ onClose, onSubmit, members = [], onRestoreMe
                         )}
 
                         {/* 이미지 썸네일 */}
-                        <div className="w-10 h-14 rounded overflow-hidden shrink-0">
+                        <div className="w-12 h-16 rounded overflow-hidden shrink-0">
                           <img
                             src={images[member.imageIndex]}
                             alt=""
@@ -394,33 +461,81 @@ export default function AddMember({ onClose, onSubmit, members = [], onRestoreMe
                           />
                         </div>
 
-                        {/* 멤버 정보 */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
+                        {/* 멤버 정보 - 편집 가능한 폼 */}
+                        <div className="flex-1 min-w-0 space-y-2">
+                          {/* 닉네임 & 성별 */}
+                          <div className="flex items-center gap-2">
                             <input
                               type="text"
                               value={member.nickname || ''}
                               onChange={(e) => updateExtractedMember(member.id, 'nickname', e.target.value)}
-                              className="text-sm font-medium text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-[#0575E6] focus:outline-none px-0 py-0.5 w-24"
+                              placeholder="닉네임"
+                              className="flex-1 text-sm font-medium text-slate-900 bg-white border border-slate-200 rounded px-2 py-1 focus:border-[#0575E6] focus:outline-none"
                             />
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                              member.sex === 'M' ? 'bg-blue-100 text-blue-600' : 'bg-pink-100 text-pink-600'
-                            }`}>
-                              {member.sex === 'M' ? '남' : '여'}
-                            </span>
+                            <div className="flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => updateExtractedMember(member.id, 'sex', 'M')}
+                                className={`text-[10px] px-2 py-1 rounded ${
+                                  member.sex === 'M'
+                                    ? 'bg-blue-500 text-white'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                              >
+                                남
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateExtractedMember(member.id, 'sex', 'F')}
+                                className={`text-[10px] px-2 py-1 rounded ${
+                                  member.sex === 'F'
+                                    ? 'bg-pink-500 text-white'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                                }`}
+                              >
+                                여
+                              </button>
+                            </div>
                           </div>
-                          
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
-                            {member.birthYear && (
-                              <span>{member.birthYear}년생 ({calculateAge(member.birthYear)}세)</span>
-                            )}
-                            {member.region && <span>{member.region}</span>}
-                            {member.joinDate && <span>가입: {member.joinDate}</span>}
+
+                          {/* 출생년도 & 지역 */}
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={member.birthYear || ''}
+                              onChange={(e) => updateExtractedMember(member.id, 'birthYear', e.target.value)}
+                              placeholder="출생년도"
+                              className="w-20 text-[11px] text-slate-700 bg-white border border-slate-200 rounded px-2 py-1 focus:border-[#0575E6] focus:outline-none"
+                            />
+                            <input
+                              type="text"
+                              value={member.region || ''}
+                              onChange={(e) => updateExtractedMember(member.id, 'region', e.target.value)}
+                              placeholder="지역"
+                              className="flex-1 text-[11px] text-slate-700 bg-white border border-slate-200 rounded px-2 py-1 focus:border-[#0575E6] focus:outline-none"
+                            />
                           </div>
+
+                          {/* 가입일 */}
+                          <div>
+                            <input
+                              type="date"
+                              value={member.joinDate || ''}
+                              onChange={(e) => updateExtractedMember(member.id, 'joinDate', e.target.value)}
+                              className="w-full text-[11px] text-slate-700 bg-white border border-slate-200 rounded px-2 py-1 focus:border-[#0575E6] focus:outline-none"
+                            />
+                          </div>
+
+                          {/* 파싱 실패 경고 */}
+                          {member.parseError && (
+                            <p className="text-[10px] text-orange-600">
+                              ⚠️ 자동 추출 실패 - 직접 입력해주세요
+                            </p>
+                          )}
 
                           {/* 중복 경고 */}
                           {member.isDuplicate && (
-                            <div className="mt-2">
+                            <div>
                               <p className="text-[10px] text-amber-600 mb-1">
                                 ⚠️ {member.isDisabled ? '비활성화된 멤버' : '이미 등록된 멤버'}
                               </p>
