@@ -469,14 +469,14 @@ export default function AddMember({ onClose, onSubmit, members = [], onRestoreMe
                           />
                         )}
 
-                        {/* 이미지 썸네일 */}
+                        {/* 이미지 썸네일 
                         <div className="w-12 h-16 rounded overflow-hidden shrink-0">
                           <img
                             src={images[member.imageIndex]}
                             alt=""
                             className="w-full h-full object-cover"
                           />
-                        </div>
+                        </div>*/}
 
                         {/* 멤버 정보 - 편집 가능한 폼 */}
                         <div className="flex-1 min-w-0 space-y-2">
