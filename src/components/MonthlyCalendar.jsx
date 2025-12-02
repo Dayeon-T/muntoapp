@@ -10,7 +10,7 @@ import SocialingCard from './SocialingCard';
 
 const DAY_NAMES = ['월', '화', '수', '목', '금', '토', '일'];
 
-export default function MonthlyCalendar({ events, onAddClick, checkedEvents = {}, onToggleChecked }) {
+export default function MonthlyCalendar({ events, onAddClick, onToggleChecked, onUpdateParticipantStatus, onCancelEvent, onEditClick }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
 
@@ -73,7 +73,7 @@ export default function MonthlyCalendar({ events, onAddClick, checkedEvents = {}
             onClick={goToToday}
             className="text-[11px] text-slate-500 hover:text-slate-700 transition"
           >
-            오늘로
+            이번달 보기
           </button>
         </div>
         
@@ -198,8 +198,11 @@ export default function MonthlyCalendar({ events, onAddClick, checkedEvents = {}
                 <SocialingCard 
                   key={event.id} 
                   event={event}
-                  isChecked={checkedEvents[event.id] || false}
+                  isChecked={event.isChecked || false}
                   onToggleChecked={onToggleChecked ? () => onToggleChecked(event.id) : undefined}
+                  onUpdateParticipantStatus={onUpdateParticipantStatus}
+                  onCancelEvent={onCancelEvent}
+                  onEditClick={onEditClick}
                 />
               ))}
             </div>
@@ -215,22 +218,20 @@ export default function MonthlyCalendar({ events, onAddClick, checkedEvents = {}
       {!selectedDate && monthEvents.length > 0 && (
         <div className="pt-3 border-t border-slate-200">
           <p className="text-xs font-medium text-slate-500 mb-2">
-            이번 달 소셜링 ({monthEvents.length}개)
+            월간 소셜링 ({monthEvents.length}개)
           </p>
           <div className="space-y-2">
-            {monthEvents.slice(0, 5).map((event) => (
+            {monthEvents.map((event) => (
               <SocialingCard 
                 key={event.id} 
                 event={event}
-                isChecked={checkedEvents[event.id] || false}
+                isChecked={event.isChecked || false}
                 onToggleChecked={onToggleChecked ? () => onToggleChecked(event.id) : undefined}
+                onUpdateParticipantStatus={onUpdateParticipantStatus}
+                onCancelEvent={onCancelEvent}
+                onEditClick={onEditClick}
               />
             ))}
-            {monthEvents.length > 5 && (
-              <p className="text-xs text-slate-400 text-center py-2">
-                +{monthEvents.length - 5}개 더...
-              </p>
-            )}
           </div>
         </div>
       )}

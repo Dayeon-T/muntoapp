@@ -8,13 +8,18 @@
  * @returns {Object} 통계 객체
  */
 export function calcParticipantStats(participants = []) {
+  let totalRegistered = 0; // 신청자 (예정 이벤트용)
   let totalAttended = 0;
   let totalNoShow = 0;
   let maleCount = 0;
   let femaleCount = 0;
 
   participants.forEach((p) => {
-    if (p.status === 'attended') {
+    if (p.status === 'registered') {
+      totalRegistered++;
+      if (p.sex === 'M') maleCount++;
+      if (p.sex === 'F') femaleCount++;
+    } else if (p.status === 'attended') {
       totalAttended++;
       if (p.sex === 'M') maleCount++;
       if (p.sex === 'F') femaleCount++;
@@ -23,12 +28,17 @@ export function calcParticipantStats(participants = []) {
     }
   });
 
+  // 총 참여 예정 인원 (신청자 또는 참석자)
+  const totalParticipants = totalRegistered + totalAttended;
+
   // 성비 위험: 참석자 중 남자가 1명이거나 여자가 1명일 때
   const genderRiskFlag = maleCount === 1 || femaleCount === 1;
 
   return {
+    totalRegistered,
     totalAttended,
     totalNoShow,
+    totalParticipants,
     maleCount,
     femaleCount,
     genderRiskFlag,

@@ -1,6 +1,9 @@
 /**
  * 소셜링(이벤트) 목업 데이터
  * - 2025-12-02 기준 앞뒤로 날짜 배치
+ * - participants의 id는 mockMembers의 id와 일치
+ * - 예정(scheduled) 이벤트: 참가자 status = 'registered'
+ * - 완료(done) 이벤트: 참가자 status = 'attended' | 'no_show'
  */
 
 export const mockEvents = [
@@ -12,11 +15,13 @@ export const mockEvents = [
     status: 'scheduled',
     hasAlcohol: false,
     isNight: false,
+    minParticipants: 3,
+    maxParticipants: 6,
     participants: [
-      { id: 101, nickname: '영희', sex: 'F', status: 'attended', role: 'host' },
-      { id: 102, nickname: 'JA', sex: 'F', status: 'attended', role: 'member' },
-      { id: 103, nickname: 'MS', sex: 'M', status: 'attended', role: 'member' },
-      { id: 104, nickname: 'SO', sex: 'F', status: 'attended', role: 'member' },
+      { id: 101, nickname: '영희', sex: 'F', status: 'registered', role: 'host' },
+      { id: 102, nickname: 'JA', sex: 'F', status: 'registered', role: 'member' },
+      { id: 201, nickname: '민수', sex: 'M', status: 'registered', role: 'member' },
+      { id: 204, nickname: '수진', sex: 'F', status: 'registered', role: 'member' },
     ],
   },
   {
@@ -42,9 +47,11 @@ export const mockEvents = [
     status: 'scheduled',
     hasAlcohol: false,
     isNight: false,
+    minParticipants: 3,
+    maxParticipants: 4,
     participants: [
-      { id: 301, nickname: '하나', sex: 'F', status: 'attended', role: 'host' },
-      { id: 302, nickname: '준호', sex: 'M', status: 'attended', role: 'member' },
+      { id: 401, nickname: '태희', sex: 'F', status: 'registered', role: 'host' },
+      { id: 402, nickname: '동현', sex: 'M', status: 'registered', role: 'member' },
     ],
   },
   {
@@ -61,6 +68,7 @@ export const mockEvents = [
       { id: 403, nickname: '서연', sex: 'F', status: 'attended', role: 'member' },
       { id: 404, nickname: '재민', sex: 'M', status: 'attended', role: 'member' },
       { id: 405, nickname: '유나', sex: 'F', status: 'no_show', role: 'member' },
+      { id: 203, nickname: '철수', sex: 'M', status: 'no_show', role: 'member' },
     ],
   },
   {
@@ -72,11 +80,11 @@ export const mockEvents = [
     hasAlcohol: true,
     isNight: true,
     participants: [
-      { id: 501, nickname: '지훈', sex: 'M', status: 'attended', role: 'host' },
-      { id: 502, nickname: '예린', sex: 'F', status: 'attended', role: 'member' },
-      { id: 503, nickname: '상훈', sex: 'M', status: 'attended', role: 'member' },
-      { id: 504, nickname: '미나', sex: 'F', status: 'attended', role: 'member' },
-      { id: 505, nickname: '현우', sex: 'M', status: 'attended', role: 'member' },
+      { id: 501, nickname: '지훈', sex: 'M', status: 'registered', role: 'host' },
+      { id: 902, nickname: '서아', sex: 'F', status: 'registered', role: 'member' },
+      { id: 903, nickname: '예준', sex: 'M', status: 'registered', role: 'member' },
+      { id: 204, nickname: '수진', sex: 'F', status: 'registered', role: 'member' },
+      { id: 404, nickname: '재민', sex: 'M', status: 'registered', role: 'member' },
     ],
   },
   {
@@ -88,8 +96,8 @@ export const mockEvents = [
     hasAlcohol: false,
     isNight: false,
     participants: [
-      { id: 601, nickname: '소영', sex: 'F', status: 'attended', role: 'host' },
-      { id: 602, nickname: '정민', sex: 'M', status: 'attended', role: 'member' },
+      { id: 701, nickname: '은지', sex: 'F', status: 'registered', role: 'host' },
+      { id: 202, nickname: '지영', sex: 'F', status: 'registered', role: 'member' },
     ],
   },
   {
@@ -101,10 +109,10 @@ export const mockEvents = [
     hasAlcohol: false,
     isNight: false,
     participants: [
-      { id: 701, nickname: '은지', sex: 'F', status: 'attended', role: 'host' },
-      { id: 702, nickname: '다은', sex: 'F', status: 'attended', role: 'member' },
-      { id: 703, nickname: '혜진', sex: 'F', status: 'attended', role: 'member' },
-      { id: 704, nickname: '승민', sex: 'M', status: 'attended', role: 'member' },
+      { id: 701, nickname: '은지', sex: 'F', status: 'registered', role: 'host' },
+      { id: 403, nickname: '서연', sex: 'F', status: 'registered', role: 'member' },
+      { id: 405, nickname: '유나', sex: 'F', status: 'registered', role: 'member' },
+      { id: 801, nickname: '시우', sex: 'M', status: 'registered', role: 'member' },
     ],
   },
   {
@@ -116,9 +124,9 @@ export const mockEvents = [
     hasAlcohol: false,
     isNight: false,
     participants: [
-      { id: 801, nickname: '시우', sex: 'M', status: 'attended', role: 'host' },
-      { id: 802, nickname: '하윤', sex: 'F', status: 'attended', role: 'member' },
-      { id: 803, nickname: '도윤', sex: 'M', status: 'attended', role: 'member' },
+      { id: 801, nickname: '시우', sex: 'M', status: 'registered', role: 'host' },
+      { id: 102, nickname: 'JA', sex: 'F', status: 'registered', role: 'member' },
+      { id: 402, nickname: '동현', sex: 'M', status: 'registered', role: 'member' },
     ],
   },
   {
@@ -134,6 +142,7 @@ export const mockEvents = [
       { id: 902, nickname: '서아', sex: 'F', status: 'attended', role: 'member' },
       { id: 903, nickname: '예준', sex: 'M', status: 'attended', role: 'member' },
       { id: 904, nickname: '수아', sex: 'F', status: 'no_show', role: 'member' },
+      { id: 404, nickname: '재민', sex: 'M', status: 'attended', role: 'member' },
     ],
   },
 ];

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // Gemini API 설정
-const genAI = new GoogleGenerativeAI('AIzaSyBce4cgL-yJQcGRI72fEMhzVRiyp46zzTg');
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 
 export default function GeminiOcrTest() {
   const [images, setImages] = useState([]);

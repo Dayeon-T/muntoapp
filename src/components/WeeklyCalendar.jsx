@@ -10,7 +10,7 @@ import SocialingCard from './SocialingCard';
 
 const DAY_NAMES = ['월', '화', '수', '목', '금', '토', '일'];
 
-export default function WeeklyCalendar({ events, onAddClick, checkedEvents = {}, onToggleChecked }) {
+export default function WeeklyCalendar({ events, onAddClick, onToggleChecked, onUpdateParticipantStatus, onCancelEvent, onEditClick }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(null);
 
@@ -75,7 +75,7 @@ export default function WeeklyCalendar({ events, onAddClick, checkedEvents = {},
             onClick={goToToday}
             className="text-[11px] text-slate-500 hover:text-[#0575E6] transition"
           >
-            오늘로
+            이번주 보기
           </button>
         </div>
         
@@ -161,8 +161,11 @@ export default function WeeklyCalendar({ events, onAddClick, checkedEvents = {},
                 <SocialingCard 
                   key={event.id} 
                   event={event}
-                  isChecked={checkedEvents[event.id] || false}
+                  isChecked={event.isChecked || false}
                   onToggleChecked={onToggleChecked ? () => onToggleChecked(event.id) : undefined}
+                  onUpdateParticipantStatus={onUpdateParticipantStatus}
+                  onCancelEvent={onCancelEvent}
+                  onEditClick={onEditClick}
                 />
               ))}
             </div>
@@ -178,7 +181,7 @@ export default function WeeklyCalendar({ events, onAddClick, checkedEvents = {},
       {!selectedDate && (
         <div className="pt-3 border-t border-slate-200">
           <p className="text-xs font-medium text-slate-500 mb-2">
-            이번 주 소셜링 ({weekEvents.length}개)
+            주간 소셜링 ({weekEvents.length}개)
           </p>
           {weekEvents.length > 0 ? (
             <div className="space-y-2">
@@ -186,14 +189,17 @@ export default function WeeklyCalendar({ events, onAddClick, checkedEvents = {},
                 <SocialingCard 
                   key={event.id} 
                   event={event}
-                  isChecked={checkedEvents[event.id] || false}
+                  isChecked={event.isChecked || false}
                   onToggleChecked={onToggleChecked ? () => onToggleChecked(event.id) : undefined}
+                  onUpdateParticipantStatus={onUpdateParticipantStatus}
+                  onCancelEvent={onCancelEvent}
+                  onEditClick={onEditClick}
                 />
               ))}
             </div>
           ) : (
             <p className="text-sm text-slate-400 text-center py-4">
-              이번 주 예정된 소셜링이 없습니다
+              예정된 소셜링이 없습니다
             </p>
           )}
         </div>

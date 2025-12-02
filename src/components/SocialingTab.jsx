@@ -1,11 +1,18 @@
-import { useState, useMemo } from 'react';
-import { mockEvents } from '../data/mockEvents';
+import { useState, useMemo, useEffect } from 'react';
 import { sortEvents } from '../utils/socialingStats';
 import SocialingCard from './SocialingCard';
 import MemberTab from './MemberTab';
 import WeeklyCalendar from './WeeklyCalendar';
 import MonthlyCalendar from './MonthlyCalendar';
 import NinetyLogo from '../assets/90.svg?react';
+import { useToast } from './Toast';
+import EmptyState from './EmptyState';
+import { 
+  getSocialings, 
+  updateParticipantStatus as updateParticipantStatusAPI,
+  cancelSocialing,
+  toggleSocialingChecked,
+} from '../services/socialingService';
 
 
 // 필터 태그 옵션 - 상태
@@ -21,19 +28,112 @@ const PROPERTY_TAGS = [
   { id: 'needsCheck', label: '확인필요' },
 ];
 
-export default function SocialingTab({ onAddClick }) {
+export default function SocialingTab({ onAddClick, onEditClick }) {
   const [activeTab, setActiveTab] = useState('socialing');
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'weekly' | 'monthly'
   const [sortBy, setSortBy] = useState('newest'); // 'newest' | 'oldest'
   const [selectedTags, setSelectedTags] = useState([]); // 선택된 필터 태그들
-  const [checkedEvents, setCheckedEvents] = useState({}); // 조치완료 상태 { eventId: boolean }
+  const [events, setEvents] = useState([]); // 이벤트 상태 관리
+  const [searchQuery, setSearchQuery] = useState(''); // 검색어
+  const [loading, setLoading] = useState(true); // 로딩 상태
+  const toast = useToast();
+
+  // 데이터 로드
+  useEffect(() => {
+    loadSocialings();
+  }, []);
+
+  const loadSocialings = async () => {
+    try {
+      setLoading(true);
+      const data = await getSocialings();
+      setEvents(data);
+    } catch (error) {
+      toast.error('소셜링 목록을 불러오는데 실패했습니다');
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // 조치완료 토글
-  const toggleChecked = (eventId) => {
-    setCheckedEvents((prev) => ({
-      ...prev,
-      [eventId]: !prev[eventId],
-    }));
+  const toggleChecked = async (eventId) => {
+    const event = events.find((e) => e.id === eventId);
+    const newChecked = !event?.isChecked;
+    
+    // 낙관적 업데이트
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId ? { ...e, isChecked: newChecked } : e
+      )
+    );
+
+    try {
+      await toggleSocialingChecked(eventId, newChecked);
+    } catch (error) {
+      // 실패시 롤백
+      setEvents((prev) =>
+        prev.map((e) =>
+          e.id === eventId ? { ...e, isChecked: !newChecked } : e
+        )
+      );
+      toast.error('조치완료 상태 변경에 실패했습니다');
+    }
+  };
+
+  // 참가자 상태 변경 (노쇼 토글)
+  const updateParticipantStatus = async (eventId, participantId, newStatus) => {
+    // 낙관적 업데이트
+    setEvents((prev) =>
+      prev.map((event) => {
+        if (event.id !== eventId) return event;
+        return {
+          ...event,
+          participants: event.participants.map((p) =>
+            p.id === participantId ? { ...p, status: newStatus } : p
+          ),
+        };
+      })
+    );
+
+    try {
+      await updateParticipantStatusAPI(eventId, participantId, newStatus);
+    } catch (error) {
+      // 실패시 데이터 다시 로드
+      toast.error('참가자 상태 변경에 실패했습니다');
+      loadSocialings();
+    }
+  };
+
+  // 이벤트 취소
+  const cancelEvent = async (eventId) => {
+    const event = events.find((e) => e.id === eventId);
+    
+    // 낙관적 업데이트
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId ? { ...e, status: 'cancelled' } : e
+      )
+    );
+
+    try {
+      await cancelSocialing(eventId);
+      toast.success(`"${event?.title}" 소셜링이 취소되었습니다`);
+    } catch (error) {
+      // 실패시 데이터 다시 로드
+      toast.error('소셜링 취소에 실패했습니다');
+      loadSocialings();
+    }
+  };
+
+  // 이벤트 수정
+  const updateEvent = (eventId, updatedData) => {
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId ? { ...e, ...updatedData } : e
+      )
+    );
+    toast.success('소셜링이 수정되었습니다');
   };
 
   // 태그 토글
@@ -47,14 +147,27 @@ export default function SocialingTab({ onAddClick }) {
 
   // 정렬 + 필터 적용
   const filteredEvents = useMemo(() => {
-    const sorted = sortEvents(mockEvents, sortBy);
+    let result = sortEvents(events, sortBy);
     
-    // 태그 필터가 없으면 전체 반환
-    if (selectedTags.length === 0) return sorted;
+    // 검색 필터 적용
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter((event) => {
+        const host = event.participants?.find(p => p.role === 'host');
+        return (
+          event.title?.toLowerCase().includes(q) ||
+          event.location?.toLowerCase().includes(q) ||
+          host?.nickname?.toLowerCase().includes(q)
+        );
+      });
+    }
+    
+    // 태그 필터가 없으면 검색 결과만 반환
+    if (selectedTags.length === 0) return result;
 
-    return sorted.filter((event) => {
-      const totalAttended = event.participants.filter(p => p.status === 'attended').length;
-      const isConfirmed = event.status === 'scheduled' && totalAttended >= 3;
+    return result.filter((event) => {
+      const totalParticipants = event.participants?.length || 0;
+      const isConfirmed = event.status === 'scheduled' && totalParticipants >= 3;
 
       // 선택된 태그 중 하나라도 매칭되면 표시
       return selectedTags.some((tag) => {
@@ -68,15 +181,17 @@ export default function SocialingTab({ onAddClick }) {
           case 'cancelled':
             return event.status === 'cancelled';
           case 'needsCheck':
+            // 취소된 모임은 확인필요에서 제외
+            if (event.status === 'cancelled') return false;
             // 음주/야간/노쇼 중 하나라도 있고, 조치완료되지 않은 것
-            const hasAttention = event.hasAlcohol || event.isNight || event.participants.some(p => p.status === 'no_show');
-            return hasAttention && !checkedEvents[event.id];
+            const hasAttention = event.hasAlcohol || event.isNight || event.participants?.some(p => p.status === 'no_show');
+            return hasAttention && !event.isChecked;
           default:
             return false;
         }
       });
     });
-  }, [sortBy, selectedTags, checkedEvents]);
+  }, [events, sortBy, selectedTags, searchQuery]);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -92,7 +207,7 @@ export default function SocialingTab({ onAddClick }) {
         <p className="text-[13px] text-slate-500 mt-0.5">
           {activeTab === 'socialing'
             ? '날짜별 소셜링 개최 현황을 확인하고 등록하세요'
-            : '멤버 활동도와 출석 현황을 확인하세요'}
+            : '클럽원들의 활동현황을 확인하세요'}
         </p>
       </header>
 
@@ -125,12 +240,12 @@ export default function SocialingTab({ onAddClick }) {
         <main className="px-4 pt-3 pb-6">
           {/* 뷰 모드 토글 */}
           <div className="flex justify-center mb-3">
-            <div className="inline-flex gap-1 p-1 bg-slate-100 rounded-full">
+            <div className="shadow-inner inline-flex gap-1 p-1 bg-slate-100 rounded-full">
               <button
                 onClick={() => setViewMode('list')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
                   viewMode === 'list'
-                    ? 'bg-[#0575E6] text-white shadow-sm'
+                    ? 'bg-[#0575E6] text-white shadow-md'
                     : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
@@ -140,21 +255,21 @@ export default function SocialingTab({ onAddClick }) {
                 onClick={() => setViewMode('weekly')}
                 className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
                   viewMode === 'weekly'
-                    ? 'bg-[#0575E6] text-white shadow-sm'
+                    ? 'bg-[#0575E6] text-white shadow-md'
                     : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                이번주
+                주간
               </button>
               <button
                 onClick={() => setViewMode('monthly')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
+                className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all   ${
                   viewMode === 'monthly'
-                    ? 'bg-[#0575E6] text-white shadow-sm'
+                    ? 'bg-[#0575E6] text-white shadow-md'
                     : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                월별
+                월간
               </button>
             </div>
           </div>
@@ -162,6 +277,17 @@ export default function SocialingTab({ onAddClick }) {
           {/* 뷰 모드별 콘텐츠 렌더링 */}
           {viewMode === 'list' && (
             <>
+              {/* 검색 */}
+              <div className="mb-3">
+                <input
+                  type="text"
+                  placeholder="제목, 호스트, 장소로 검색..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-[#0575E6] placeholder:text-slate-400"
+                />
+              </div>
+
               {/* 정렬 */}
               <div className="flex items-center justify-between mb-2">
                 <select
@@ -172,9 +298,9 @@ export default function SocialingTab({ onAddClick }) {
                   <option value="newest">최신순</option>
                   <option value="oldest">오래된순</option>
                 </select>
-                {selectedTags.length > 0 && (
+                {(selectedTags.length > 0 || searchQuery) && (
                   <button
-                    onClick={() => setSelectedTags([])}
+                    onClick={() => { setSelectedTags([]); setSearchQuery(''); }}
                     className="text-[10px] text-slate-400 hover:text-slate-600"
                   >
                     필터 초기화
@@ -219,42 +345,65 @@ export default function SocialingTab({ onAddClick }) {
               </div>
 
               {/* 카드 리스트 */}
-              {filteredEvents.length > 0 ? (
+              {loading ? (
+                <div className="flex justify-center items-center py-20">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0575E6]"></div>
+                </div>
+              ) : filteredEvents.length > 0 ? (
                 <div className="space-y-3 pb-20">
                   {filteredEvents.map((event) => (
                     <SocialingCard 
                       key={event.id} 
                       event={event}
-                      isChecked={checkedEvents[event.id] || false}
+                      isChecked={event.isChecked || false}
                       onToggleChecked={() => toggleChecked(event.id)}
+                      onUpdateParticipantStatus={updateParticipantStatus}
+                      onCancelEvent={cancelEvent}
+                      onEditClick={onEditClick}
                     />
                   ))}
                 </div>
               ) : (
-                <div className="py-12 text-center">
-                  <p className="text-sm text-slate-500">
-                    조건에 맞는 이벤트가 없습니다
-                  </p>
-                </div>
+                <EmptyState 
+                  preset={
+                    searchQuery
+                      ? 'noSearchResults'
+                      : selectedTags.includes('needsCheck') 
+                        ? 'noNeedsCheck'
+                        : selectedTags.includes('scheduled')
+                          ? 'noScheduled'
+                          : selectedTags.includes('done')
+                            ? 'noDone'
+                            : selectedTags.includes('cancelled')
+                              ? 'noCancelled'
+                              : selectedTags.length > 0
+                                ? 'noFilterResults'
+                                : 'noEvents'
+                  }
+                />
               )}
             </>
           )}
 
           {viewMode === 'weekly' && (
             <WeeklyCalendar 
-              events={mockEvents} 
+              events={events} 
               onAddClick={onAddClick}
-              checkedEvents={checkedEvents}
               onToggleChecked={toggleChecked}
+              onUpdateParticipantStatus={updateParticipantStatus}
+              onCancelEvent={cancelEvent}
+              onEditClick={onEditClick}
             />
           )}
 
           {viewMode === 'monthly' && (
             <MonthlyCalendar 
-              events={mockEvents} 
+              events={events} 
               onAddClick={onAddClick}
-              checkedEvents={checkedEvents}
               onToggleChecked={toggleChecked}
+              onUpdateParticipantStatus={updateParticipantStatus}
+              onCancelEvent={cancelEvent}
+              onEditClick={onEditClick}
             />
           )}
         </main>
@@ -267,7 +416,7 @@ export default function SocialingTab({ onAddClick }) {
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent">
           <button
             onClick={onAddClick}
-            className="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-medium hover:bg-slate-800 transition-all flex items-center justify-center gap-2 shadow-lg"
+            className="w-full py-3 bg-[#0575E6] text-white rounded-xl text-sm font-medium hover:bg-blue-700 active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-lg"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />

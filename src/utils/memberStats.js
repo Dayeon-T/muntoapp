@@ -31,18 +31,36 @@ export function calcMemberStats(member, today = new Date()) {
     daysSinceLast = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   }
 
+  // 가입일로부터 경과일 계산
+  let daysSinceJoin = null;
+  if (member.joinDate) {
+    const joinDate = new Date(member.joinDate);
+    const diffTime = today.getTime() - joinDate.getTime();
+    daysSinceJoin = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  }
+
   // 60일 이상 미참여 여부
   const inactive60d = daysSinceLast !== null && daysSinceLast >= 60;
 
-  // 상태 플래그 결정
-  let statusFlag = 'ACTIVE';
+  // 가입 후 60일 이상 경과했는데 참여 0회인 경우
+  const inactiveNoParticipation = totalAttended === 0 && daysSinceJoin !== null && daysSinceJoin >= 60;
+
+  // 조치 필요 사유 결정 (비활성화 전까지는 ACTIVE 유지)
+  let actionReason = null;
+  
   if (totalNoShow >= 2) {
-    statusFlag = 'WARN';
-  } else if (inactive60d || (attendedLogs.length === 0 && logs.length === 0)) {
-    // 참여 이력 없는 신규도 일단 ACTIVE로 (또는 별도 처리 가능)
-    if (inactive60d) {
-      statusFlag = 'INACTIVE';
-    }
+    actionReason = 'noshow'; // 노쇼 2회 이상
+  } else if (inactive60d || inactiveNoParticipation) {
+    actionReason = 'inactive'; // 2개월 미활동
+  }
+
+  // 조치 필요 여부
+  const needsAction = actionReason !== null;
+
+  // 상태 플래그: 비활성화 전까지는 ACTIVE
+  let statusFlag = 'ACTIVE';
+  if (member.status === 'disabled') {
+    statusFlag = 'DISABLED';
   }
 
   return {
@@ -50,8 +68,12 @@ export function calcMemberStats(member, today = new Date()) {
     totalNoShow,
     lastParticipationAt,
     daysSinceLast,
+    daysSinceJoin,
     inactive60d,
+    inactiveNoParticipation,
     statusFlag,
+    actionReason,
+    needsAction,
   };
 }
 
@@ -60,17 +82,47 @@ export function calcMemberStats(member, today = new Date()) {
  * @param {Array} members - 멤버 배열
  * @returns {Array} 정렬된 배열
  */
-export function sortMembersByLastParticipation(members) {
+export function sortMembers(members, sortOption = 'LATEST') {
   return [...members].sort((a, b) => {
+    // 비활성화 멤버는 항상 맨 마지막으로
+    const isDisabledA = a.status === 'disabled';
+    const isDisabledB = b.status === 'disabled';
+    if (isDisabledA && !isDisabledB) return 1;
+    if (!isDisabledA && isDisabledB) return -1;
+
     const statsA = calcMemberStats(a);
     const statsB = calcMemberStats(b);
 
-    // 참여 이력 없는 경우 맨 뒤로
-    if (!statsA.lastParticipationAt && !statsB.lastParticipationAt) return 0;
-    if (!statsA.lastParticipationAt) return 1;
-    if (!statsB.lastParticipationAt) return -1;
-
-    return new Date(statsB.lastParticipationAt) - new Date(statsA.lastParticipationAt);
+    switch (sortOption) {
+      case 'NICKNAME_ASC':
+        return a.nickname.localeCompare(b.nickname, 'ko');
+      case 'NAME_ASC':
+        return (a.name || '').localeCompare(b.name || '', 'ko');
+      case 'AGE_ASC':
+        return (a.age || 0) - (b.age || 0);
+      case 'ACTIVITY_DESC': {
+        const diff = statsB.totalAttended - statsA.totalAttended;
+        if (diff !== 0) return diff;
+        return statsA.totalNoShow - statsB.totalNoShow;
+      }
+      case 'ACTIVITY_ASC': {
+        const diff = statsA.totalAttended - statsB.totalAttended;
+        if (diff !== 0) return diff;
+        return statsB.totalNoShow - statsA.totalNoShow;
+      }
+      case 'LATEST':
+      default: {
+        const hasLastA = !!statsA.lastParticipationAt;
+        const hasLastB = !!statsB.lastParticipationAt;
+        if (!hasLastA && !hasLastB) return 0;
+        if (!hasLastA) return 1;
+        if (!hasLastB) return -1;
+        return (
+          new Date(statsB.lastParticipationAt) -
+          new Date(statsA.lastParticipationAt)
+        );
+      }
+    }
   });
 }
 
@@ -81,10 +133,24 @@ export function sortMembersByLastParticipation(members) {
  * @returns {Array} 필터된 배열
  */
 export function filterByStatus(members, statusFilter) {
-  if (statusFilter === 'ALL') return members;
+  // 전체: 비활성화 멤버 제외
+  if (statusFilter === 'ALL') {
+    return members.filter((m) => m.status !== 'disabled');
+  }
 
   return members.filter((m) => {
     const stats = calcMemberStats(m);
+    
+    // 조치필요: WARN(노쇼) + INACTIVE(미활동) 모두 포함 (비활성화된 멤버 제외)
+    if (statusFilter === 'NEEDS_ACTION') {
+      return stats.needsAction && m.status !== 'disabled';
+    }
+    
+    // 비활성화 필터
+    if (statusFilter === 'DISABLED') {
+      return m.status === 'disabled';
+    }
+    
     return stats.statusFlag === statusFilter;
   });
 }
