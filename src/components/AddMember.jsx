@@ -83,46 +83,80 @@ export default function AddMember({ onClose, onSubmit, members = [], onRestoreMe
 
         const prompt = `이 이미지는 "문토" 앱의 멤버 프로필 화면 캡처입니다.
 
-이미지에서 다음 정보를 추출해주세요:
+이미지에 보이는 모든 멤버의 정보를 추출해주세요.
 
-1. nickname (닉네임): 프로필 상단에 표시된 닉네임
-2. joinDate (가입일): "YYYY.M.D 가입" 형태로 표시된 날짜 → "YYYY-MM-DD" 형식으로 변환
-3. birthYear (출생년도): 자기소개에서 "XX년생" 형태 → 4자리 년도로 변환 (예: 94년생 → 1994)
-4. sex (성별): 자기소개에서 남자/여자 언급 → "M" 또는 "F"
-5. region (지역): 지역 정보가 있으면 추출 (예: 강남구, 마포구 등)
+각 멤버에 대해:
+1. nickname (닉네임): 프로필에 표시된 닉네임
+2. joinDate (가입일): "YYYY.M.D 가입" 형태 → "YYYY-MM-DD" 형식으로 변환
+3. birthYear (출생년도): "XX년생" → 4자리 년도 (예: 94년생 → 1994)
+4. sex (성별): 남자/여자 → "M" 또는 "F"
+5. region (지역): 지역 정보 (예: 강남구, 마포구)
 
-반드시 아래 JSON 형식으로만 응답해주세요 (다른 텍스트 없이):
-{
-  "nickname": "닉네임",
-  "joinDate": "2025-12-02",
-  "birthYear": "1994",
-  "sex": "M",
-  "region": "지역명 또는 빈문자열"
-}
+**반드시 JSON 배열 형식으로만 응답** (다른 텍스트 없이):
+[
+  {
+    "nickname": "닉네임1",
+    "joinDate": "2025-12-02",
+    "birthYear": "1994",
+    "sex": "M",
+    "region": ""
+  },
+  {
+    "nickname": "닉네임2",
+    "joinDate": "2025-11-15",
+    "birthYear": "1990",
+    "sex": "F",
+    "region": "강남구"
+  }
+]
 
 참고:
-- 년생이 두 자리면 1900년대(예: 94 → 1994) 또는 2000년대(예: 04 → 2004)로 적절히 변환
-- 성별을 찾을 수 없으면 빈 문자열
-- 지역을 찾을 수 없으면 빈 문자열
-- 정보를 찾을 수 없어도 반드시 위 JSON 형식으로 응답 (찾을 수 없는 필드는 빈 문자열)`;
+- 멤버가 1명이어도 배열 형식 [{ ... }]으로 응답
+- 년생이 두 자리면 적절히 변환 (94→1994, 04→2004)
+- 찾을 수 없는 필드는 빈 문자열
+- 이미지에서 멤버를 찾을 수 없으면 빈 배열 []`;
 
         try {
           const response = await model.generateContent([prompt, imagePart]);
           const text = response.response.text();
           console.log(`이미지 ${i + 1} AI 응답:`, text); // 디버깅용
           
-          const jsonMatch = text.match(/\{[\s\S]*?\}/);
+          // JSON 배열 또는 객체 파싱 시도
+          let parsedMembers = [];
           
-          if (jsonMatch) {
+          // 배열 형태 먼저 시도
+          const arrayMatch = text.match(/\[[\s\S]*\]/);
+          if (arrayMatch) {
             try {
-              const parsed = JSON.parse(jsonMatch[0]);
+              parsedMembers = JSON.parse(arrayMatch[0]);
+              if (!Array.isArray(parsedMembers)) {
+                parsedMembers = [parsedMembers];
+              }
+            } catch {
+              // 배열 파싱 실패 시 개별 객체 시도
+              const objectMatch = text.match(/\{[\s\S]*?\}/);
+              if (objectMatch) {
+                parsedMembers = [JSON.parse(objectMatch[0])];
+              }
+            }
+          } else {
+            // 배열이 없으면 객체 시도
+            const objectMatch = text.match(/\{[\s\S]*?\}/);
+            if (objectMatch) {
+              parsedMembers = [JSON.parse(objectMatch[0])];
+            }
+          }
+          
+          if (parsedMembers.length > 0) {
+            // 추출된 각 멤버를 results에 추가
+            parsedMembers.forEach((parsed, idx) => {
               const existingMember = members.find(
                 (m) => m.nickname?.toLowerCase() === parsed.nickname?.toLowerCase()
               );
               
               results.push({
-                id: Date.now() + i,
-                nickname: parsed.nickname || `멤버${i + 1}`,
+                id: Date.now() + i * 100 + idx, // 고유 ID 보장
+                nickname: parsed.nickname || '',
                 joinDate: parsed.joinDate || '',
                 birthYear: parsed.birthYear || '',
                 sex: parsed.sex || '',
@@ -133,26 +167,9 @@ export default function AddMember({ onClose, onSubmit, members = [], onRestoreMe
                 isDisabled: existingMember?.status === 'disabled',
                 parseError: false,
               });
-            } catch (parseErr) {
-              console.error(`이미지 ${i + 1} JSON 파싱 실패:`, parseErr);
-              // 파싱 실패해도 빈 데이터로 추가 (수동 입력 가능)
-              results.push({
-                id: Date.now() + i,
-                nickname: '',
-                joinDate: '',
-                birthYear: '',
-                sex: '',
-                region: '',
-                imageIndex: i,
-                isDuplicate: false,
-                existingMember: null,
-                isDisabled: false,
-                parseError: true,
-              });
-              failedCount++;
-            }
+            });
           } else {
-            // JSON 형식이 없는 경우 빈 데이터로 추가
+            // 파싱 실패 시 빈 데이터로 추가
             results.push({
               id: Date.now() + i,
               nickname: '',
