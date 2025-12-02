@@ -105,7 +105,7 @@ export default function GeminiOcrTest() {
     <div className="min-h-screen bg-slate-50 px-4 py-6">
       <div className="max-w-md mx-auto">
         <h1 className="text-xl font-semibold text-slate-900 mb-1">
-          🤖 Gemini AI 인식
+          Gemini AI 인식
         </h1>
         <p className="text-[13px] text-slate-500 mb-4">
           문토 앱 캡처 이미지를 AI가 분석합니다
@@ -154,7 +154,7 @@ export default function GeminiOcrTest() {
             disabled={loading}
             className="w-full py-3 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 disabled:bg-blue-300 transition mb-4"
           >
-            {loading ? '🤖 AI 분석 중...' : '🤖 Gemini AI로 분석하기'}
+            {loading ? '분석 중...' : '분석하기'}
           </button>
         )}
 
