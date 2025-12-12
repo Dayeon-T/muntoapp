@@ -15,15 +15,16 @@ export function calcParticipantStats(participants = []) {
   let femaleCount = 0;
 
   participants.forEach((p) => {
-    if (p.status === 'registered') {
+    // status가 없거나 'registered'면 신청자로 처리
+    if (!p.status || p.status === "registered") {
       totalRegistered++;
-      if (p.sex === 'M') maleCount++;
-      if (p.sex === 'F') femaleCount++;
-    } else if (p.status === 'attended') {
+      if (p.sex === "M") maleCount++;
+      if (p.sex === "F") femaleCount++;
+    } else if (p.status === "attended") {
       totalAttended++;
-      if (p.sex === 'M') maleCount++;
-      if (p.sex === 'F') femaleCount++;
-    } else if (p.status === 'no_show') {
+      if (p.sex === "M") maleCount++;
+      if (p.sex === "F") femaleCount++;
+    } else if (p.status === "no_show") {
       totalNoShow++;
     }
   });
@@ -51,7 +52,7 @@ export function calcParticipantStats(participants = []) {
  * @returns {Object|null} 호스트 참여자 또는 null
  */
 export function findHost(participants = []) {
-  return participants.find((p) => p.role === 'host') || null;
+  return participants.find((p) => p.role === "host") || null;
 }
 
 /**
@@ -78,8 +79,8 @@ export function sortEventsByDateAsc(events) {
  * @param {string} sortBy - 정렬 기준 ('newest' | 'oldest')
  * @returns {Array} 정렬된 배열
  */
-export function sortEvents(events, sortBy = 'newest') {
-  if (sortBy === 'oldest') {
+export function sortEvents(events, sortBy = "newest") {
+  if (sortBy === "oldest") {
     return sortEventsByDateAsc(events);
   }
   return sortEventsByDateDesc(events);
@@ -91,7 +92,7 @@ export function sortEvents(events, sortBy = 'newest') {
  * @returns {Array} status가 'scheduled'인 이벤트만
  */
 export function filterScheduledOnly(events) {
-  return events.filter((e) => e.status === 'scheduled');
+  return events.filter((e) => e.status === "scheduled");
 }
 
 /**
@@ -140,15 +141,15 @@ export function getWeekRange(date = new Date()) {
   const day = d.getDay();
   // 월요일을 주의 시작으로 (0=일요일이므로 조정)
   const diff = day === 0 ? -6 : 1 - day;
-  
+
   const start = new Date(d);
   start.setDate(d.getDate() + diff);
   start.setHours(0, 0, 0, 0);
-  
+
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
   end.setHours(23, 59, 59, 999);
-  
+
   return { start, end };
 }
 
@@ -161,10 +162,10 @@ export function getMonthRange(date = new Date()) {
   const d = new Date(date);
   const start = new Date(d.getFullYear(), d.getMonth(), 1);
   start.setHours(0, 0, 0, 0);
-  
+
   const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
   end.setHours(23, 59, 59, 999);
-  
+
   return { start, end };
 }
 
@@ -205,8 +206,8 @@ export function groupEventsByDate(events) {
  */
 export function formatDateToString(date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
@@ -234,34 +235,33 @@ export function getWeekDays(date = new Date()) {
 export function getCalendarDays(date = new Date()) {
   const year = date.getFullYear();
   const month = date.getMonth();
-  
+
   const firstDay = new Date(year, month, 1);
   const lastDay = new Date(year, month + 1, 0);
-  
+
   // 월요일 시작 기준으로 첫 주의 시작점 계산
   let startDay = firstDay.getDay();
   startDay = startDay === 0 ? 6 : startDay - 1; // 월요일 = 0
-  
+
   const days = [];
-  
+
   // 이전 달 날짜 채우기
   const prevMonthLastDay = new Date(year, month, 0);
   for (let i = startDay - 1; i >= 0; i--) {
     const d = new Date(year, month - 1, prevMonthLastDay.getDate() - i);
     days.push({ date: d, isCurrentMonth: false });
   }
-  
+
   // 현재 달 날짜 채우기
   for (let i = 1; i <= lastDay.getDate(); i++) {
     days.push({ date: new Date(year, month, i), isCurrentMonth: true });
   }
-  
+
   // 다음 달 날짜로 42개 채우기
   const remaining = 42 - days.length;
   for (let i = 1; i <= remaining; i++) {
     days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
   }
-  
+
   return days;
 }
-
